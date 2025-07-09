@@ -6,6 +6,10 @@ app = FastAPI(title="SOW Extractor API")
 
 API_KEY = os.environ.get("API_KEY")  # lê do ambiente
 
+@app.get("/")
+def health_check():
+    return {"status": "ok"}
+
 @app.post("/extract")
 async def extract(
     file: UploadFile,
