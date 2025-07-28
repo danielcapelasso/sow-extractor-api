@@ -1,111 +1,73 @@
 from docx import Document
-from io import BytesIO
+import io
 import re
 
 def extract_sow_data(file_bytes):
-    doc = Document(BytesIO(file_bytes))
+    document = Document(io.BytesIO(file_bytes))
 
-    result = {
+    data = {
         "consultor_responsavel": None,
-        "contexto_projeto": "",
+        "contexto_projeto": None,
         "etapas_projeto": None,
         "tempo_estimado": None,
         "principais_regras_negocio": [],
         "resumo_servicos": [],
-        "casos_de_uso_detalhados": []  # manual por enquanto
+        "casos_de_uso_detalhados": []
     }
 
-    current_section = None
-    found_resumo_servicos = False
+    for i, table in enumerate(document.tables):
+        # Novo formato: tabela com tipo, regra, descrição, comentário, atendido
+        headers = [cell.text.strip().lower() for cell in table.rows[0].cells]
+        if "tipo" in headers and "regra" in headers:
+            for row in table.rows[1:]:
+                cells = row.cells
+                try:
+                    tipo = cells[0].text.strip()
+                    regra = cells[1].text.strip()
+                    descricao = cells[2].text.strip() if len(cells) > 2 else ""
+                    comentario = cells[3].text.strip() if len(cells) > 3 else ""
+                    atendido = cells[4].text.strip().upper() if len(cells) > 4 else ""
+                    data["principais_regras_negocio"].append({
+                        "tipo": tipo,
+                        "regra": regra,
+                        "descricao": descricao,
+                        "comentario": comentario,
+                        "atendido": atendido
+                    })
+                except Exception:
+                    continue
 
-    # Folha resumo
-    for table in doc.tables:
-        for row in table.rows:
-            cells = [cell.text.strip() for cell in row.cells]
-            if len(cells) >= 2:
-                raw_key = cells[0]
-                key = re.sub(r"\s+", " ", raw_key).strip().lower()
-                value = cells[1].strip()
+        # Resumo de serviços (modelo antigo)
+        elif "serviço" in headers[0].lower():
+            for row in table.rows[1:]:
+                cells = row.cells
+                if len(cells) >= 2:
+                    data["resumo_servicos"].append({
+                        "serviço": cells[0].text.strip(),
+                        "detalhes": cells[1].text.strip()
+                    })
 
-                if not result["consultor_responsavel"] and ("preparado por" in key or "preparado pela" in key):
-                    result["consultor_responsavel"] = value.split("/")[0].strip()
-                elif not result["etapas_projeto"] and "etapas do projeto" in key:
-                    result["etapas_projeto"] = value
-                elif not result["tempo_estimado"] and "tempo estimado" in key:
-                    result["tempo_estimado"] = value
+    # Pega textos soltos do documento
+    full_text = "\n".join([p.text for p in document.paragraphs])
 
-    # Contexto e demais seções
-    for para in doc.paragraphs:
-        text = para.text.strip()
-        if not text:
-            continue
+    # Padrões simples baseados no texto
+    match = re.search(r"Consultor Responsável: (.+)", full_text)
+    if match:
+        data["consultor_responsavel"] = match.group(1).strip()
 
-        if current_section != "contexto_projeto" and (
-            "objetivo geral" in text.lower() or "objetivos de negócio mapeado" in text.lower()
-        ):
-            current_section = "contexto_projeto"
-            continue
+    match = re.search(r"Objetivo Geral[:\-]?\s*(.+)", full_text)
+    if match:
+        data["contexto_projeto"] = match.group(1).strip()
 
-        if current_section != "principais_regras_negocio" and (
-            "principais regras de negócio" in text.lower()
-        ):
-            current_section = "principais_regras_negocio"
-            continue
+    match = re.search(r"Etapas do Projeto[:\-]?\s*(.+)", full_text)
+    if match:
+        data["etapas_projeto"] = match.group(1).strip()
 
-        if not found_resumo_servicos and "resumo de serviços a serem providos" in text.lower():
-            found_resumo_servicos = True
-            current_section = None
-            continue
+    match = re.search(r"Tempo Estimado[:\-]?\s*(.+)", full_text)
+    if match:
+        data["tempo_estimado"] = match.group(1).strip()
 
-        if any(
-            t in text.lower()
-            for t in [
-                "abordagem", "gaps", "arquitetura", "esforços", "glossário", "anexo"
-            ]
-        ):
-            current_section = None
-            continue
-
-        if current_section == "contexto_projeto":
-            result["contexto_projeto"] += " " + text
-
-    if result["contexto_projeto"]:
-        result["contexto_projeto"] = result["contexto_projeto"].strip()
-        result["contexto_projeto"] = re.sub(
-            r"^(1\.\d\s*)?Objetivos? de negócio Mapeado\s*", "", result["contexto_projeto"], flags=re.IGNORECASE
-        )
-
-    # Resumo de Serviços
-    if found_resumo_servicos:
-        for table in doc.tables:
-            header_cells = [cell.text.strip().lower() for cell in table.rows[0].cells]
-            if "serviço" in header_cells or "servico" in header_cells:
-                for row in table.rows[1:]:
-                    cols = [cell.text.strip() for cell in row.cells]
-                    servico = {}
-                    for idx, col in enumerate(cols):
-                        key = header_cells[idx] if idx < len(header_cells) else f"coluna_{idx+1}"
-                        servico[key] = col
-                    if any(servico.values()):
-                        result["resumo_servicos"].append(servico)
-                break
-
-    # Principais regras de negócio
-    for table in doc.tables[1:]:
-        for row in table.rows[1:]:
-            cols = [cell.text.strip() for cell in row.cells]
-            if len(cols) >= 5:
-                regra = {
-                    "item": cols[0],
-                    "regra_negocio": cols[1],
-                    "atendido": cols[2],
-                    "comentario": cols[3],
-                    "caso_de_uso": cols[4]
-                }
-                if any(v for v in regra.values()):
-                    result["principais_regras_negocio"].append(regra)
-
-    return result
+    return data
 
 
 
