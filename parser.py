@@ -93,7 +93,6 @@ def extract_sow_data(file_bytes):
 # Principais regras de negócio
 for table in doc.tables[1:]:
     headers = [cell.text.strip().lower() for cell in table.rows[0].cells]
-
     for row in table.rows[1:]:
         cols = [cell.text.strip() for cell in row.cells]
         if len(cols) >= 5:
