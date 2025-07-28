@@ -102,6 +102,15 @@ def extract_sow_data(file_bytes):
                     "comentario": cols[3],
                     "atendido": cols[4]
                 }
+                else:
+                # Modelo antigo
+                regra = {
+                    "item": cols[0],
+                    "regra_negocio": cols[1],
+                    "atendido": cols[2], 
+                    "comentario": cols[3],
+                    "caso_uso": cols[4] 
+                }
                 if any(v for v in regra.values()):
                     result["principais_regras_negocio"].append(regra)
 
