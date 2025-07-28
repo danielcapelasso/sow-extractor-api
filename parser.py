@@ -90,34 +90,23 @@ def extract_sow_data(file_bytes):
                         result["resumo_servicos"].append(servico)
                 break
 
-# Principais regras de negócio
-for table in doc.tables[1:]:
-    headers = [cell.text.strip().lower() for cell in table.rows[0].cells]
-
-    for row in table.rows[1:]:
-        cols = [cell.text.strip() for cell in row.cells]
-        if len(cols) >= 5:
-            if "descrição" in headers[2]:
-                # Modelo novo
+    # Principais regras de negócio
+    for table in doc.tables[1:]:
+        for row in table.rows[1:]:
+            cols = [cell.text.strip() for cell in row.cells]
+            if len(cols) >= 5:
                 regra = {
-                    "item": cols[0],
+                    "caso_uso": cols[0],
                     "regra_negocio": cols[1],
                     "descricao_regra": cols[2],
                     "comentario": cols[3],
                     "atendido": cols[4]
                 }
-            else:
-                # Modelo antigo
-                regra = {
-                    "item": cols[0],
-                    "regra_negocio": cols[1],
-                    "descricao_regra": cols[2],  # era 'atendido'
-                    "comentario": cols[3],
-                    "atendido": cols[4]  # era 'caso_de_uso'
-                }
+                if any(v for v in regra.values()):
+                    result["principais_regras_negocio"].append(regra)
 
-            if any(v for v in regra.values()):
-                result["principais_regras_negocio"].append(regra)
+    return result
+
 
 
 
