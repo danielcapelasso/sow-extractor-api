@@ -134,43 +134,55 @@ def extract_sow_data(file_bytes):
                     })
    
 # Casos custom - DETALHES
-    current_custom = None
-    for para in doc.paragraphs:
-        text = para.text.strip()
-        if not found_custom_section:
-            if "descrição dos casos especiais" in text.lower():
-                found_custom_section = True
-            continue
+current_custom = None
+section = None
+collecting = False
 
-        if found_custom_section:
-            if text.isupper() or re.match(r'^[A-Z].+Pedido$', text):
-                if current_custom:
-                    result["casos_custom_detalhados"].append(current_custom)
-                current_custom = {
-                    "nome": text,
-                    "descricao": "",
-                    "fluxo": "",
-                    "criterios_aceite": "",
-                    "requisitos_dependencias": ""
-                }
-                continue
+for para in doc.paragraphs:
+    text = para.text.strip()
+    if not text:
+        continue
 
-            if current_custom:
-                lower = text.lower()
-                if "descrição:" in lower:
-                    current_custom["descricao"] += text.replace("Descrição:", "").strip() + " "
-                elif "fluxo" in lower:
-                    current_section = "fluxo"
-                elif "critério" in lower or "critérios de aceite" in lower:
-                    current_section = "criterios_aceite"
-                elif "requerimentos" in lower or "dependência" in lower:
-                    current_section = "requisitos_dependencias"
-                else:
-                    if current_section and current_custom.get(current_section) is not None:
-                        current_custom[current_section] += text + " "
+    # Início da seção
+    if "anexo 5" in text.lower() or "descrição dos casos especiais" in text.lower():
+        collecting = True
+        continue
+
+    if not collecting:
+        continue
+
+    # Novo título detectado
+    if text.istitle() and len(text.split()) <= 6:
+        if current_custom:
+            result["casos_custom_detalhados"].append(current_custom)
+        current_custom = {
+            "nome": text,
+            "descricao": "",
+            "fluxo": "",
+            "criterios_aceite": "",
+            "requisitos_dependencias": ""
+        }
+        section = "descricao"
+        continue
 
     if current_custom:
-        result["casos_custom_detalhados"].append(current_custom)
+        lower = text.lower()
+        if "fluxo" in lower:
+            section = "fluxo"
+            continue
+        elif "critério" in lower or "critérios de aceite" in lower:
+            section = "criterios_aceite"
+            continue
+        elif "requerimentos" in lower or "dependência" in lower:
+            section = "requisitos_dependencias"
+            continue
+
+        if section:
+            current_custom[section] += text + " "
+
+# Não esquecer de salvar o último
+if current_custom:
+    result["casos_custom_detalhados"].append(current_custom)
 
     return result
 
