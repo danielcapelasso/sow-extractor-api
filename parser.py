@@ -133,76 +133,46 @@ def extract_sow_data(file_bytes):
                         "descricao": cols[3]
                     })
    
-# Casos custom - RESUMO
-    for table in doc.tables:
-        header = [cell.text.strip().lower() for cell in table.rows[0].cells]
-        if all(h in header for h in ["caso de uso", "tipo", "integração", "descrição do caso de uso"]):
-            for row in table.rows[1:]:
-                cols = [cell.text.strip() for cell in row.cells]
-                if len(cols) >= 4:
-                    result["casos_custom_resumo"].append({
-                        "caso_de_uso": cols[0],
-                        "tipo": cols[1],
-                        "integracao": cols[2],
-                        "descricao": cols[3]
-                    })
-
-    # Casos custom - DETALHES
+# Casos custom - DETALHES
     current_custom = None
-    current_section = None
-    collecting = False
-
     for para in doc.paragraphs:
         text = para.text.strip()
-        if not text:
+        if not found_custom_section:
+            if "descrição dos casos especiais" in text.lower():
+                found_custom_section = True
             continue
 
-        # Começa a ler a seção correta
-        if not collecting and (
-            "anexo 5" in text.lower() or "descrição dos casos especiais" in text.lower()
-        ):
-            collecting = True
-            continue
+        if found_custom_section:
+            if text.isupper() or re.match(r'^[A-Z].+Pedido$', text):
+                if current_custom:
+                    result["casos_custom_detalhados"].append(current_custom)
+                current_custom = {
+                    "nome": text,
+                    "descricao": "",
+                    "fluxo": "",
+                    "criterios_aceite": "",
+                    "requisitos_dependencias": ""
+                }
+                continue
 
-        if not collecting:
-            continue
-
-        # Detecta novo título de caso custom
-        if len(text.split()) <= 6 and text.lower() not in [
-            "descrição", "fluxo", "critérios de aceite", "requerimentos", "dependências", "requerimentos / dependências"
-        ]:
             if current_custom:
-                result["casos_custom_detalhados"].append(current_custom)
-            current_custom = {
-                "nome": text,
-                "descricao": "",
-                "fluxo": "",
-                "criterios_aceite": "",
-                "requisitos_dependencias": ""
-            }
-            current_section = "descricao"
-            continue
+                lower = text.lower()
+                if "descrição:" in lower:
+                    current_custom["descricao"] += text.replace("Descrição:", "").strip() + " "
+                elif "fluxo" in lower:
+                    current_section = "fluxo"
+                elif "critério" in lower or "critérios de aceite" in lower:
+                    current_section = "criterios_aceite"
+                elif "requerimentos" in lower or "dependência" in lower:
+                    current_section = "requisitos_dependencias"
+                else:
+                    if current_section and current_custom.get(current_section) is not None:
+                        current_custom[current_section] += text + " "
 
-        # Troca de seção
-        lower = text.lower()
-        if "fluxo" in lower:
-            current_section = "fluxo"
-            continue
-        elif "critério" in lower or "critérios de aceite" in lower:
-            current_section = "criterios_aceite"
-            continue
-        elif "requerimentos" in lower or "dependência" in lower:
-            current_section = "requisitos_dependencias"
-            continue
-
-        # Acumula conteúdo da seção atual
-        if current_custom and current_section:
-            current_custom[current_section] += text + " "
-
-    # Salva o último caso
     if current_custom:
         result["casos_custom_detalhados"].append(current_custom)
 
+    return result
 
 
 
