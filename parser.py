@@ -184,7 +184,7 @@ for para in doc.paragraphs:
 if current_custom:
         result["casos_custom_detalhados"].append(current_custom)
 
-return result
+    return result
 
 
 
