@@ -12,11 +12,14 @@ def extract_sow_data(file_bytes):
         "tempo_estimado": None,
         "principais_regras_negocio": [],
         "resumo_servicos": [],
-        "casos_de_uso_detalhados": []  # manual por enquanto
+        "casos_de_uso_detalhados": [],
+        "casos_custom_resumo": [],
+        "casos_custom_detalhados": []
     }
 
     current_section = None
     found_resumo_servicos = False
+    found_custom_section = False
 
     # Folha resumo
     for table in doc.tables:
@@ -90,7 +93,7 @@ def extract_sow_data(file_bytes):
                         result["resumo_servicos"].append(servico)
                 break
 
-# Principais regras de negócio (🚨 agora está dentro da função)
+# Principais regras de negócio
     for table in doc.tables[1:]:
         headers = [cell.text.strip().lower() for cell in table.rows[0].cells]
         for row in table.rows[1:]:
@@ -116,8 +119,60 @@ def extract_sow_data(file_bytes):
                 if any(v for v in regra.values()):
                     result["principais_regras_negocio"].append(regra)
 
-    return result
+    # Casos custom - RESUMO
+    for table in doc.tables:
+        header = [cell.text.strip().lower() for cell in table.rows[0].cells]
+        if all(h in header for h in ["caso de uso", "tipo", "integração", "descrição do caso de uso"]):
+            for row in table.rows[1:]:
+                cols = [cell.text.strip() for cell in row.cells]
+                if len(cols) >= 4:
+                    result["casos_custom_resumo"].append({
+                        "caso_de_uso": cols[0],
+                        "tipo": cols[1],
+                        "integracao": cols[2],
+                        "descricao": cols[3]
+                    })
+   
+# Casos custom - DETALHES
+    current_custom = None
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not found_custom_section:
+            if "descrição dos casos especiais" in text.lower():
+                found_custom_section = True
+            continue
 
+        if found_custom_section:
+            if text.isupper() or re.match(r'^[A-Z].+Pedido$', text):
+                if current_custom:
+                    result["casos_custom_detalhados"].append(current_custom)
+                current_custom = {
+                    "nome": text,
+                    "descricao": "",
+                    "fluxo": "",
+                    "criterios_aceite": "",
+                    "requisitos_dependencias": ""
+                }
+                continue
+
+            if current_custom:
+                lower = text.lower()
+                if "descrição:" in lower:
+                    current_custom["descricao"] += text.replace("Descrição:", "").strip() + " "
+                elif "fluxo" in lower:
+                    current_section = "fluxo"
+                elif "critério" in lower or "critérios de aceite" in lower:
+                    current_section = "criterios_aceite"
+                elif "requerimentos" in lower or "dependência" in lower:
+                    current_section = "requisitos_dependencias"
+                else:
+                    if current_section and current_custom.get(current_section) is not None:
+                        current_custom[current_section] += text + " "
+
+    if current_custom:
+        result["casos_custom_detalhados"].append(current_custom)
+
+    return result
 
 
 
