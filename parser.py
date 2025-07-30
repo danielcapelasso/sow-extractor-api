@@ -152,7 +152,7 @@ current_custom = None
 current_section = None
 collecting = False
 
-for para in doc.paragraphs:
+    for para in doc.paragraphs:
     text = para.text.strip()
     if not text:
         continue
