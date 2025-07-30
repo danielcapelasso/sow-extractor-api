@@ -182,9 +182,9 @@ for para in doc.paragraphs:
 
 # Não esquecer de salvar o último
 if current_custom:
-    result["casos_custom_detalhados"].append(current_custom)
+        result["casos_custom_detalhados"].append(current_custom)
 
-    return result
+return result
 
 
 
